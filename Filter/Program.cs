@@ -13,98 +13,130 @@ namespace Filter
         static void Main(string[] args)
         {
             AuthorService authorService = new AuthorService();
-            var res = authorService.Get(new AuthorSearchModel() {SearchQueryInt=0,SearchQuery= "patmutyun" });
-            //var ttt = authorService.authors.AsQueryable().TextFilter("patmutyun");
-            
+            SearchModel searchModel = new SearchModel();
+            searchModel.SearchQuery = "50";
+            searchModel.PropertyName = "Age";
+            searchModel.Typ = SearchTypes.Gret;
+            SearchModel searchModel1 = new SearchModel();
+            searchModel1.PropertyName = "FirstName";
+            searchModel1.SearchQuery = "hovo";
+            searchModel1.Typ = SearchTypes.Equals;
+            Search search = new Search();
+            search.searchModels.Add(searchModel);
+            search.searchModels.Add(searchModel1);
+            //var kkk = authorService.authorList.AsQueryable().FilterQuery(search);
+            var vvvvvv = authorService.authorList.AsQueryable().TryFilter(search);
+
+
+            var ses = authorService.Get(searchModel);
 
         }
-        public List<T> Filter<T>(List<T> collection, string property, string filterValue)
-        {
-            var filteredCollection = new List<T>();
-            foreach (var item in collection)
-            {
-                var propertyInfo =
-                    item.GetType()
-                        .GetProperty(property, BindingFlags.Public | BindingFlags.Instance);
-                if (propertyInfo == null)
-                    throw new NotSupportedException("property given does not exists");
+    }
 
-                var propertyValue = propertyInfo.GetValue(item, null);
-                if (propertyValue == filterValue)
-                    filteredCollection.Add(item);
+    public static class Test
+    {
+        public static IQueryable<T> TryFilter<T>(this IQueryable<T> source, Search search)
+        {
+            List<T> start = new List<T>();
+            if (search.searchModels.Count > 1)
+            {
+                List<T> starttemp = new List<T>();
+                List<T> temp = new List<T>();
+                for (int i = 0; i < search.searchModels.Count; i++)
+                {
+                    var res = source.FilterQuery(search.searchModels[i]);
+                    if (i == 0)
+                    {
+
+                    }
+                }
+                return start.AsQueryable();
             }
 
-            return filteredCollection;
+            //query.AsQueryable().FilterQuery(search);
+            return start.AsQueryable();
         }
-    }
-   
-    public static class FilterExtention
-    {
-        public static IQueryable<T> TextFilter<T>(this IQueryable<T> source, string term)
+        public static IQueryable<T> FilterQuery<T>(this IQueryable<T> source, SearchModel search)
         {
-            if (string.IsNullOrEmpty(term)) { return source; }
+            var filterCollection = new List<T>();
+            var mytype = typeof(T);
+            
+                foreach (var item in source)
+                {
+                    var propertyInfo =
+                       item.GetType()
+                           .GetProperty(search.PropertyName, BindingFlags.Public | BindingFlags.Instance);
 
-            Type elementType = typeof(T);
+                    var value = propertyInfo.GetValue(item, null);
 
-            PropertyInfo[] stringProperties =
-                elementType.GetProperties()
-                    .Where(x => x.PropertyType == typeof(string))
-                    .ToArray();
-            if (!stringProperties.Any()) { return source; }
+                    if (search.Typ == SearchTypes.Equals)
+                    {
+                        var searchValue = search.SearchQuery.Trim();
+                        if (string.Equals(value, searchValue))
+                            filterCollection.Add(item);
+                    }
 
-            MethodInfo containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
+                    if (search.Typ == SearchTypes.Contains)
+                    {
+                        if (value.ToString().Contains(search.SearchQuery))
+                            filterCollection.Add(item);
+                    }
 
-            ParameterExpression prm = Expression.Parameter(elementType);
+                    if (search.Typ == SearchTypes.Gret)
+                    {
+                        var searchValue = int.Parse(search.SearchQuery);
+                        var valueGreat = int.Parse(value.ToString());
+                        if (valueGreat > searchValue)
+                            filterCollection.Add(item);
+                    }
+                    if (search.Typ == SearchTypes.Less)
+                    {
+                        var searchValue = int.Parse(search.SearchQuery);
+                        var valueGreat = int.Parse(value.ToString());
+                        if (valueGreat < searchValue)
+                            filterCollection.Add(item);
+                    }
+                    if (search.Typ == SearchTypes.GreaterOrEqual)
+                    {
+                        var searchValue = int.Parse(search.SearchQuery);
+                        var valueGreat = int.Parse(value.ToString());
+                        if (valueGreat >= searchValue)
+                            filterCollection.Add(item);
+                    }
+                    if (search.Typ == SearchTypes.LessOrEqual)
+                    {
+                        var searchValue = int.Parse(search.SearchQuery);
+                        var valueGreat = int.Parse(value.ToString());
+                        if (valueGreat <= searchValue)
+                            filterCollection.Add(item);
+                    }
+                }
+            
 
-            IEnumerable<Expression> expressions = stringProperties
-                .Select(prp =>
-                   Expression.Call(
-                      Expression.Property(
-                            prm,
-                            prp
-                        ),
-                        containsMethod,
-                      Expression.Constant(term)
-                    )
-                );
-
-            Expression body = expressions
-                .Aggregate(
-                    (prev, current) => prev==null?current:prev
-                );
-
-            Expression<Func<T, bool>> lambda = Expression.Lambda<Func<T, bool>>(body, prm);
-
-            return source.Where(lambda);
+            return filterCollection.AsQueryable();
         }
     }
-    public class Author
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string Surname { get; set; }
-        public int Age { get; set; }
-        public string Genre { get; set; }
-    }
+
     public class AuthorService
     {
-        public List<Author> authors = new List<Author>()
-            {
-                new Author(){Id=1,Name="test",Surname="tetyan",Age=50,Genre = "arkacayin" },
-                new Author(){Id=2,Name="hov",Surname="tuman",Age=150,Genre = "patmutyun" },
-                new Author(){Id=3,Name="test",Surname="azizyan",Age=50,Genre = "epos" },
-                new Author(){Id=4,Name="vardan",Surname="sedrakyan",Age=50,Genre = "patmutyun" },
-                new Author(){Id=5,Name="avetiq",Surname="isahakyan",Age=50,Genre = "arkacayin" },
-            };
-        public List<Author> Get(AuthorSearchModel authorSearch)
+        public List<Author> authorList = new List<Author>()
         {
-            var author = authors.AsQueryable().TextFilter(authorSearch.SearchQuery); 
-            return author.ToList();
+            new Author(){Id=1,FirstName="hovo",LastName="tumanyan",Age=150,Category="patmvacq" },
+            new Author(){Id=2,FirstName="avo",LastName="isahakyan",Age=130,Category="banastexcutun" },
+            new Author(){Id=3,FirstName="hovo",LastName="yesim",Age=50,Category="epos" },
+            new Author(){Id=4,FirstName="vardan",LastName="sedrakyan",Age=60,Category="epos" },
+            new Author(){Id=5,FirstName="test",LastName="testyan",Age=50,Category="patmvacq" },
+            new Author(){Id=7,FirstName="ttttt",LastName="tttttt",Age=27,Category="tttttt" },
+            new Author(){Id=8,FirstName="kkkkk",LastName="kkkkkk",Age=25,Category="kkkkk" },
+            new Author(){Id=9,FirstName="vvvvv",LastName="vvvvvv",Age=45,Category="vvvvvv" },
+        };
+
+        public List<Author> Get(SearchModel searchModel)
+        {
+            var ppp = authorList.AsQueryable().TextFilter(searchModel.SearchQuery).ToList();
+            return ppp;
         }
     }
-    public class AuthorSearchModel
-    {
-        public string SearchQuery { get; set; }
-        public int SearchQueryInt { get; set; }
-    }
+
+
 }
