@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,42 +9,87 @@ namespace Filter
 {
     public static class FilterExtention
     {
-        public static IQueryable<T> TextFilter<T>(this IQueryable<T> source, string term)
+        public static IQueryable<T> Filter<T>(this IQueryable<T> source, Search search)
         {
-            if (string.IsNullOrEmpty(term)) { return source; }
 
-            Type elementType = typeof(T);
+            if (search.searchModels.Count > 1)
+            {
+                List<T> Filteres = new List<T>();
+                var caunt = search.searchModels.Count + 1;
 
-            PropertyInfo[] stringProperties =
-                elementType.GetProperties()
-                    .Where(x => x.PropertyType == typeof(string))
-                    .ToArray();
-            if (!stringProperties.Any()) { return source; }
+                foreach (var item in search.searchModels)
+                {
+                    caunt--;
+                    if (caunt == 1)
+                    {
+                        return Filteres.AsQueryable().FilterQuery(item);
+                    }
+                    var res = source.FilterQuery(item);
+                    foreach (var itemres in res)
+                    {
+                        Filteres.Add(itemres);
+                    }
+                }
+                return Filteres.AsQueryable();
+            }
+            return source.FilterQuery(search.searchModels[0]);
+        }
+        public static IQueryable<T> FilterQuery<T>(this IQueryable<T> source, SearchModel search)
+        {
+            var filterCollection = new List<T>();
+            var mytype = typeof(T);
 
-            MethodInfo containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
+            foreach (var item in source)
+            {
+                var propertyInfo =
+                   item.GetType()
+                       .GetProperty(search.PropertyName, BindingFlags.Public | BindingFlags.Instance);
 
-            ParameterExpression prm = Expression.Parameter(elementType);
+                var value = propertyInfo.GetValue(item, null);
 
-            IEnumerable<Expression> expressions = stringProperties
-                .Select(prp =>
-                   Expression.Call(
-                      Expression.Property(
-                            prm,
-                            prp
-                        ),
-                        containsMethod,
-                      Expression.Constant(term)
-                    )
-                );
+                if (search.Typ == SearchTypes.Equals)
+                {
+                    var searchValue = search.SearchQuery.Trim();
+                    if (string.Equals(value, searchValue))
+                        filterCollection.Add(item);
+                }
 
-            Expression body = expressions
-                .Aggregate(
-                    (prev, current) => Expression.Or(prev, current)
-                );
+                if (search.Typ == SearchTypes.Contains)
+                {
+                    if (value.ToString().Contains(search.SearchQuery))
+                        filterCollection.Add(item);
+                }
 
-            Expression<Func<T, bool>> lambda = Expression.Lambda<Func<T, bool>>(body, prm);
-
-            return source.Where(lambda);
+                if (search.Typ == SearchTypes.Gret)
+                {
+                    var searchValue = int.Parse(search.SearchQuery);
+                    var valueGreat = int.Parse(value.ToString());
+                    if (valueGreat > searchValue)
+                        filterCollection.Add(item);
+                }
+                if (search.Typ == SearchTypes.Less)
+                {
+                    var searchValue = int.Parse(search.SearchQuery);
+                    var valueGreat = int.Parse(value.ToString());
+                    if (valueGreat < searchValue)
+                        filterCollection.Add(item);
+                }
+                if (search.Typ == SearchTypes.GreaterOrEqual)
+                {
+                    var searchValue = int.Parse(search.SearchQuery);
+                    var valueGreat = int.Parse(value.ToString());
+                    if (valueGreat >= searchValue)
+                        filterCollection.Add(item);
+                }
+                if (search.Typ == SearchTypes.LessOrEqual)
+                {
+                    var searchValue = int.Parse(search.SearchQuery);
+                    var valueGreat = int.Parse(value.ToString());
+                    if (valueGreat <= searchValue)
+                        filterCollection.Add(item);
+                }
+            }
+            return filterCollection.AsQueryable();
         }
     }
 }
